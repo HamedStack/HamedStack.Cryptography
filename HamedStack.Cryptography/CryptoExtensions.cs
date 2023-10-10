@@ -17,198 +17,6 @@ namespace HamedStack.Cryptography;
 public static class CryptoExtensions
 {
     /// <summary>
-    /// Generates a Time-based One-Time Password (TOTP) string based on the provided shared secret string.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
-    /// <param name="timeStepSeconds">The time step in seconds.</param>
-    /// <param name="codeLength">The length of the TOTP code.</param>
-    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
-    /// <returns>A string representing the TOTP.</returns>
-    public static string GenerateTOTP(this string sharedSecret, int timeStepSeconds = 30, int codeLength = 6)
-    {
-        if (string.IsNullOrEmpty(sharedSecret))
-            throw new ArgumentNullException(nameof(sharedSecret));
-        var key = Encoding.Unicode.GetBytes(sharedSecret);
-        return GenerateTOTP(key, timeStepSeconds, codeLength);
-    }
-
-    /// <summary>
-    /// Generates a Time-based One-Time Password (TOTP) string based on the provided shared secret byte array.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
-    /// <param name="timeStepSeconds">The time step in seconds.</param>
-    /// <param name="codeLength">The length of the TOTP code.</param>
-    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
-    /// <returns>A string representing the TOTP.</returns>
-    public static string GenerateTOTP(this byte[] sharedSecret, int timeStepSeconds = 30, int codeLength = 6)
-    {
-        if (sharedSecret == null || sharedSecret.Length == 0)
-            throw new ArgumentNullException(nameof(sharedSecret));
-        var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var counter = unixTimestamp / timeStepSeconds;
-        return GenerateTOTP(sharedSecret, counter, codeLength);
-    }
-
-    /// <summary>
-    /// Generates a Time-based One-Time Password (TOTP) string using the internal TOTP generation algorithm.
-    /// </summary>
-    /// <param name="key">The shared secret key.</param>
-    /// <param name="counter">The counter value representing the current time step.</param>
-    /// <param name="codeLength">The length of the TOTP code.</param>
-    /// <returns>A string representing the TOTP.</returns>
-    private static string GenerateTOTP(byte[] key, long counter, int codeLength)
-    {
-        var counterBytes = BitConverter.GetBytes(counter);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(counterBytes);
-        using var hmac = new HMACSHA256(key);
-        var hash = hmac.ComputeHash(counterBytes);
-        var offset = hash[^1] & 0xf;
-        var binaryCode = (hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 |
-                         (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff);
-        var otp = binaryCode % (int)Math.Pow(10, codeLength);
-        return otp.ToString().PadLeft(codeLength, '0');
-    }
-
-    /// <summary>
-    /// Verifies a Time-based One-Time Password (TOTP) code against the shared secret string.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
-    /// <param name="code">The TOTP code to verify.</param>
-    /// <param name="timeStepSeconds">The time step in seconds.</param>
-    /// <param name="codeLength">The length of the TOTP code.</param>
-    /// <param name="timeTolerance">The number of time steps allowed for variance in token validation.</param>
-    /// <returns>A boolean indicating if the TOTP code is valid or not.</returns>
-    public static bool VerifyTOTP(this string sharedSecret, string code, int timeStepSeconds = 30, int codeLength = 6, int timeTolerance = 1)
-    {
-        var key = Encoding.Unicode.GetBytes(sharedSecret);
-        return VerifyTOTP(key, code, timeStepSeconds, codeLength, timeTolerance);
-    }
-
-    /// <summary>
-    /// Verifies a Time-based One-Time Password (TOTP) code against the shared secret byte array.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
-    /// <param name="code">The TOTP code to verify.</param>
-    /// <param name="timeStepSeconds">The time step in seconds.</param>
-    /// <param name="codeLength">The length of the TOTP code.</param>
-    /// <param name="timeTolerance">The number of time steps allowed for variance in token validation.</param>
-    /// <returns>A boolean indicating if the TOTP code is valid or not.</returns>
-    public static bool VerifyTOTP(this byte[] sharedSecret, string code, int timeStepSeconds = 30, int codeLength = 6, int timeTolerance = 1)
-    {
-        var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var counter = unixTimestamp / timeStepSeconds;
-        for (var i = counter - timeTolerance; i <= counter + timeTolerance; i++)
-        {
-            var expectedCode = GenerateTOTP(sharedSecret, i, codeLength);
-            if (expectedCode == code)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Generates an HMAC-based One-Time Password (HOTP) based on the provided shared secret string.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
-    /// <param name="counter">The counter value.</param>
-    /// <param name="codeLength">The length of the HOTP code.</param>
-    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
-    /// <returns>A string representing the HOTP.</returns>
-    public static string GenerateHOTP(this string sharedSecret, long counter, int codeLength = 6)
-    {
-        if (string.IsNullOrEmpty(sharedSecret))
-            throw new ArgumentNullException(nameof(sharedSecret));
-        var key = Encoding.Unicode.GetBytes(sharedSecret);
-        return GenerateHOTP(key, counter, codeLength);
-    }
-
-    /// <summary>
-    /// Generates an HMAC-based One-Time Password (HOTP) based on the provided shared secret byte array.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
-    /// <param name="counter">The counter value.</param>
-    /// <param name="codeLength">The length of the HOTP code.</param>
-    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
-    /// <returns>A string representing the HOTP.</returns>
-    public static string GenerateHOTP(this byte[] sharedSecret, long counter, int codeLength = 6)
-    {
-        if (sharedSecret == null || sharedSecret.Length == 0)
-            throw new ArgumentNullException(nameof(sharedSecret));
-
-        var counterBytes = BitConverter.GetBytes(counter);
-        if (BitConverter.IsLittleEndian)
-            Array.Reverse(counterBytes);
-        using var hmac = new HMACSHA256(sharedSecret);
-        var hash = hmac.ComputeHash(counterBytes);
-        var offset = hash[^1] & 0xf;
-        var binaryCode = (hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 |
-                         (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff);
-        var otp = binaryCode % (int)Math.Pow(10, codeLength);
-        return otp.ToString().PadLeft(codeLength, '0');
-    }
-
-    /// <summary>
-    /// Verifies an HMAC-based One-Time Password (HOTP) code against the shared secret string.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
-    /// <param name="code">The HOTP code to verify.</param>
-    /// <param name="counter">The counter value.</param>
-    /// <param name="codeLength">The length of the HOTP code.</param>
-    /// <returns>A boolean indicating if the HOTP code is valid or not.</returns>
-    public static bool VerifyHOTP(this string sharedSecret, string code, long counter, int codeLength = 6)
-    {
-        var key = Encoding.Unicode.GetBytes(sharedSecret);
-        return VerifyHOTP(key, code, counter, codeLength);
-    }
-
-    /// <summary>
-    /// Verifies an HMAC-based One-Time Password (HOTP) code against the shared secret byte array.
-    /// </summary>
-    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
-    /// <param name="code">The HOTP code to verify.</param>
-    /// <param name="counter">The counter value.</param>
-    /// <param name="codeLength">The length of the HOTP code.</param>
-    /// <returns>A boolean indicating if the HOTP code is valid or not.</returns>
-    public static bool VerifyHOTP(this byte[] sharedSecret, string code, long counter, int codeLength = 6)
-    {
-        var expectedCode = GenerateHOTP(sharedSecret, counter, codeLength);
-        return expectedCode == code;
-    }
-
-    /// <summary>
-    /// Converts a byte array to its Base32 string representation.
-    /// </summary>
-    /// <param name="data">The byte array to convert.</param>
-    /// <returns>A Base32 string representation of the byte array.</returns>
-    public static string? ToBase32String(this byte[] data)
-    {
-        return Base32.ToBase32String(data);
-    }
-
-    /// <summary>
-    /// Converts a Base32 string to its byte array representation.
-    /// </summary>
-    /// <param name="base32String">The Base32 string to convert.</param>
-    /// <returns>A byte array representation of the Base32 string.</returns>
-    public static byte[]? FromBase32String(this string base32String)
-    {
-        return Base32.FromBase32String(base32String);
-    }
-    /// <summary>
-    /// Converts a string to its Base32 string representation using UTF-8 encoding.
-    /// </summary>
-    /// <param name="str">The string to convert.</param>
-    /// <returns>A Base32 string representation of the input string.</returns>
-    public static string? ToBase32String(this string str)
-    {
-        var data = Encoding.UTF8.GetBytes(str);
-        return Base32.ToBase32String(data);
-    }
-
-    /// <summary>
     /// Decrypts the specified cipher text using AES algorithm.
     /// </summary>
     /// <param name="cipherText">The cipher text to decrypt.</param>
@@ -814,6 +622,16 @@ public static class CryptoExtensions
     }
 
     /// <summary>
+    /// Converts a Base32 string to its byte array representation.
+    /// </summary>
+    /// <param name="base32String">The Base32 string to convert.</param>
+    /// <returns>A byte array representation of the Base32 string.</returns>
+    public static byte[]? FromBase32String(this string base32String)
+    {
+        return Base32.FromBase32String(base32String);
+    }
+
+    /// <summary>
     /// Generates a digital signature for the given byte data using the provided RSA private key.
     /// </summary>
     /// <param name="data">The data to sign.</param>
@@ -824,6 +642,126 @@ public static class CryptoExtensions
         using var rsa = new RSACryptoServiceProvider();
         rsa.ImportParameters(privateKey);
         return rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    }
+
+    /// <summary>
+    /// Generates an HMAC-based One-Time Password (HOTP) based on the provided shared secret string.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
+    /// <param name="counter">The counter value.</param>
+    /// <param name="codeLength">The length of the HOTP code.</param>
+    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
+    /// <returns>A string representing the HOTP.</returns>
+    public static string GenerateHOTP(this string sharedSecret, long counter, int codeLength = 6)
+    {
+        if (string.IsNullOrEmpty(sharedSecret))
+            throw new ArgumentNullException(nameof(sharedSecret));
+        var key = Encoding.Unicode.GetBytes(sharedSecret);
+        return GenerateHOTP(key, counter, codeLength);
+    }
+
+    /// <summary>
+    /// Generates an HMAC-based One-Time Password (HOTP) based on the provided shared secret byte array.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
+    /// <param name="counter">The counter value.</param>
+    /// <param name="codeLength">The length of the HOTP code.</param>
+    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
+    /// <returns>A string representing the HOTP.</returns>
+    public static string GenerateHOTP(this byte[] sharedSecret, long counter, int codeLength = 6)
+    {
+        if (sharedSecret == null || sharedSecret.Length == 0)
+            throw new ArgumentNullException(nameof(sharedSecret));
+
+        var counterBytes = BitConverter.GetBytes(counter);
+        if (BitConverter.IsLittleEndian)
+            Array.Reverse(counterBytes);
+        using var hmac = new HMACSHA256(sharedSecret);
+        var hash = hmac.ComputeHash(counterBytes);
+        var offset = hash[^1] & 0xf;
+        var binaryCode = (hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 |
+                         (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff);
+        var otp = binaryCode % (int)Math.Pow(10, codeLength);
+        return otp.ToString().PadLeft(codeLength, '0');
+    }
+
+    /// <summary>
+    /// Generates a secure signature for the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI to be signed.</param>
+    /// <param name="expireTime">The expiration DateTime for the signature.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>A Base64 encoded HMACSHA256 signature.</returns>
+    public static string GenerateSecureSignature(this Uri uri, DateTime expireTime, string body, string secretKey)
+    {
+        var payload = $"{uri.AbsoluteUri}|{expireTime:O}|{body}";
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secretKey));
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToBase64String(hashBytes);
+    }
+
+    /// <summary>
+    /// Generates a secure signature for the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI to be signed.</param>
+    /// <param name="duration">The duration from the current DateTime after which the signature expires.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>A Base64 encoded HMACSHA256 signature.</returns>
+    public static string GenerateSecureSignature(this Uri uri, TimeSpan duration, string body, string secretKey)
+    {
+        var expireTime = DateTime.UtcNow + duration;
+        return uri.GenerateSecureSignature(expireTime, body, secretKey);
+    }
+
+    /// <summary>
+    /// Generates a secure signature for the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI to be signed.</param>
+    /// <param name="expireOffset">The expiration DateTimeOffset for the signature.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>A Base64 encoded HMACSHA256 signature.</returns>
+    public static string GenerateSecureSignature(this Uri uri, DateTimeOffset expireOffset, string body, string secretKey)
+    {
+        var payload = $"{uri.AbsoluteUri}|{expireOffset:O}|{body}";
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secretKey));
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToBase64String(hashBytes);
+    }
+
+    /// <summary>
+    /// Generates a Time-based One-Time Password (TOTP) string based on the provided shared secret string.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
+    /// <param name="timeStepSeconds">The time step in seconds.</param>
+    /// <param name="codeLength">The length of the TOTP code.</param>
+    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
+    /// <returns>A string representing the TOTP.</returns>
+    public static string GenerateTOTP(this string sharedSecret, int timeStepSeconds = 30, int codeLength = 6)
+    {
+        if (string.IsNullOrEmpty(sharedSecret))
+            throw new ArgumentNullException(nameof(sharedSecret));
+        var key = Encoding.Unicode.GetBytes(sharedSecret);
+        return GenerateTOTP(key, timeStepSeconds, codeLength);
+    }
+
+    /// <summary>
+    /// Generates a Time-based One-Time Password (TOTP) string based on the provided shared secret byte array.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
+    /// <param name="timeStepSeconds">The time step in seconds.</param>
+    /// <param name="codeLength">The length of the TOTP code.</param>
+    /// <exception cref="ArgumentNullException">Thrown when the sharedSecret is null or empty.</exception>
+    /// <returns>A string representing the TOTP.</returns>
+    public static string GenerateTOTP(this byte[] sharedSecret, int timeStepSeconds = 30, int codeLength = 6)
+    {
+        if (sharedSecret == null || sharedSecret.Length == 0)
+            throw new ArgumentNullException(nameof(sharedSecret));
+        var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var counter = unixTimestamp / timeStepSeconds;
+        return GenerateTOTP(sharedSecret, counter, codeLength);
     }
 
     /// <summary>
@@ -911,6 +849,27 @@ public static class CryptoExtensions
     {
         var bytes = certificate.Export(contentType, password);
         return new MemoryStream(bytes);
+    }
+
+    /// <summary>
+    /// Converts a byte array to its Base32 string representation.
+    /// </summary>
+    /// <param name="data">The byte array to convert.</param>
+    /// <returns>A Base32 string representation of the byte array.</returns>
+    public static string? ToBase32String(this byte[] data)
+    {
+        return Base32.ToBase32String(data);
+    }
+
+    /// <summary>
+    /// Converts a string to its Base32 string representation using UTF-8 encoding.
+    /// </summary>
+    /// <param name="str">The string to convert.</param>
+    /// <returns>A Base32 string representation of the input string.</returns>
+    public static string? ToBase32String(this string str)
+    {
+        var data = Encoding.UTF8.GetBytes(str);
+        return Base32.ToBase32String(data);
     }
 
     /// <summary>
@@ -1223,6 +1182,57 @@ public static class CryptoExtensions
     }
 
     /// <summary>
+    /// Validates the signature of the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI whose signature needs to be validated.</param>
+    /// <param name="receivedSignature">The signature received, which needs to be verified.</param>
+    /// <param name="expireTime">The expiration DateTime for the signature.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>true if the signature is valid, false otherwise.</returns>
+    public static bool ValidateSecureSignature(this Uri uri, string receivedSignature, DateTime expireTime, string body, string secretKey)
+    {
+        if (DateTime.UtcNow > expireTime)
+            return false;
+
+        var computedSignature = uri.GenerateSecureSignature(expireTime, body, secretKey);
+        return SecureStringEquals(computedSignature, receivedSignature);
+    }
+
+
+    /// <summary>
+    /// Validates the signature of the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI whose signature needs to be validated.</param>
+    /// <param name="receivedSignature">The signature received, which needs to be verified.</param>
+    /// <param name="duration">The duration from the current DateTime after which the signature expires.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>true if the signature is valid, false otherwise.</returns>
+    public static bool ValidateSecureSignature(this Uri uri, string receivedSignature, TimeSpan duration, string body, string secretKey)
+    {
+        return ValidateSecureSignature(uri, receivedSignature, (DateTimeOffset) (DateTime.UtcNow + duration), body, secretKey);
+    }
+
+    /// <summary>
+    /// Validates the signature of the provided URI using HMACSHA256 algorithm.
+    /// </summary>
+    /// <param name="uri">The URI whose signature needs to be validated.</param>
+    /// <param name="receivedSignature">The signature received, which needs to be verified.</param>
+    /// <param name="expireOffset">The expiration DateTimeOffset for the signature.</param>
+    /// <param name="body">The body content associated with the request.</param>
+    /// <param name="secretKey">The secret key used for generating the HMACSHA256 signature.</param>
+    /// <returns>true if the signature is valid, false otherwise.</returns>
+    public static bool ValidateSecureSignature(this Uri uri, string receivedSignature, DateTimeOffset expireOffset, string body, string secretKey)
+    {
+        if (DateTimeOffset.UtcNow > expireOffset)
+            return false;
+
+        var computedSignature = uri.GenerateSecureSignature(expireOffset, body, secretKey);
+        return SecureStringEquals(computedSignature, receivedSignature);
+    }
+
+    /// <summary>
     /// Verifies the digital signature of the given data using the specified RSA public key.
     /// </summary>
     /// <param name="data">The data to verify.</param>
@@ -1234,6 +1244,73 @@ public static class CryptoExtensions
         using var rsa = new RSACryptoServiceProvider();
         rsa.ImportParameters(publicKey);
         return rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    }
+
+    /// <summary>
+    /// Verifies an HMAC-based One-Time Password (HOTP) code against the shared secret string.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
+    /// <param name="code">The HOTP code to verify.</param>
+    /// <param name="counter">The counter value.</param>
+    /// <param name="codeLength">The length of the HOTP code.</param>
+    /// <returns>A boolean indicating if the HOTP code is valid or not.</returns>
+    public static bool VerifyHOTP(this string sharedSecret, string code, long counter, int codeLength = 6)
+    {
+        var key = Encoding.Unicode.GetBytes(sharedSecret);
+        return VerifyHOTP(key, code, counter, codeLength);
+    }
+
+    /// <summary>
+    /// Verifies an HMAC-based One-Time Password (HOTP) code against the shared secret byte array.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the HOTP.</param>
+    /// <param name="code">The HOTP code to verify.</param>
+    /// <param name="counter">The counter value.</param>
+    /// <param name="codeLength">The length of the HOTP code.</param>
+    /// <returns>A boolean indicating if the HOTP code is valid or not.</returns>
+    public static bool VerifyHOTP(this byte[] sharedSecret, string code, long counter, int codeLength = 6)
+    {
+        var expectedCode = GenerateHOTP(sharedSecret, counter, codeLength);
+        return expectedCode == code;
+    }
+
+    /// <summary>
+    /// Verifies a Time-based One-Time Password (TOTP) code against the shared secret string.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
+    /// <param name="code">The TOTP code to verify.</param>
+    /// <param name="timeStepSeconds">The time step in seconds.</param>
+    /// <param name="codeLength">The length of the TOTP code.</param>
+    /// <param name="timeTolerance">The number of time steps allowed for variance in token validation.</param>
+    /// <returns>A boolean indicating if the TOTP code is valid or not.</returns>
+    public static bool VerifyTOTP(this string sharedSecret, string code, int timeStepSeconds = 30, int codeLength = 6, int timeTolerance = 1)
+    {
+        var key = Encoding.Unicode.GetBytes(sharedSecret);
+        return VerifyTOTP(key, code, timeStepSeconds, codeLength, timeTolerance);
+    }
+
+    /// <summary>
+    /// Verifies a Time-based One-Time Password (TOTP) code against the shared secret byte array.
+    /// </summary>
+    /// <param name="sharedSecret">The shared secret used for generating the TOTP.</param>
+    /// <param name="code">The TOTP code to verify.</param>
+    /// <param name="timeStepSeconds">The time step in seconds.</param>
+    /// <param name="codeLength">The length of the TOTP code.</param>
+    /// <param name="timeTolerance">The number of time steps allowed for variance in token validation.</param>
+    /// <returns>A boolean indicating if the TOTP code is valid or not.</returns>
+    public static bool VerifyTOTP(this byte[] sharedSecret, string code, int timeStepSeconds = 30, int codeLength = 6, int timeTolerance = 1)
+    {
+        var unixTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var counter = unixTimestamp / timeStepSeconds;
+        for (var i = counter - timeTolerance; i <= counter + timeTolerance; i++)
+        {
+            var expectedCode = GenerateTOTP(sharedSecret, i, codeLength);
+            if (expectedCode == code)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -1279,6 +1356,27 @@ public static class CryptoExtensions
     }
 
     /// <summary>
+    /// Generates a Time-based One-Time Password (TOTP) string using the internal TOTP generation algorithm.
+    /// </summary>
+    /// <param name="key">The shared secret key.</param>
+    /// <param name="counter">The counter value representing the current time step.</param>
+    /// <param name="codeLength">The length of the TOTP code.</param>
+    /// <returns>A string representing the TOTP.</returns>
+    private static string GenerateTOTP(byte[] key, long counter, int codeLength)
+    {
+        var counterBytes = BitConverter.GetBytes(counter);
+        if (BitConverter.IsLittleEndian)
+            Array.Reverse(counterBytes);
+        using var hmac = new HMACSHA256(key);
+        var hash = hmac.ComputeHash(counterBytes);
+        var offset = hash[^1] & 0xf;
+        var binaryCode = (hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 |
+                         (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff);
+        var otp = binaryCode % (int)Math.Pow(10, codeLength);
+        return otp.ToString().PadLeft(codeLength, '0');
+    }
+
+    /// <summary>
     /// Computes the hash of the provided input string using the given hash algorithm.
     /// </summary>
     /// <param name="hashAlgorithm">The hash algorithm to use.</param>
@@ -1312,5 +1410,18 @@ public static class CryptoExtensions
     {
         var data = hashAlgorithm.ComputeHash(stream);
         return BitConverter.ToString(data).Replace("-", string.Empty);
+    }
+
+    /// <summary>
+    /// Performs a constant-time comparison of two strings, preventing timing attacks.
+    /// </summary>
+    private static bool SecureStringEquals(string a, string b)
+    {
+        var diff = (uint)a.Length ^ (uint)b.Length;
+        for (var i = 0; i < a.Length && i < b.Length; i++)
+        {
+            diff |= (uint)(a[i] ^ b[i]);
+        }
+        return diff == 0;
     }
 }
